@@ -54,6 +54,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // TODO: Navigate to dashboard
       // For now, just show success
       print('✅ Login successful: ${result['data']}');
+      print('🔑 Token: ${result['data']['token']}');
 
       // You can navigate to dashboard here:
       // Navigator.pushReplacementNamed(context, '/dashboard');
