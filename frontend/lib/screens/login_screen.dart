@@ -2,7 +2,8 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import 'registration_screen.dart';
-
+import 'parent_dashboard_screen.dart';
+import 'child_login_screen.dart';
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
 
@@ -20,13 +21,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   bool _obscurePassword = true;
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
 
   // Login function
   Future<void> _login() async {
@@ -48,20 +42,43 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     if (result['success']) {
-      // Show success and navigate to dashboard
-      _showSuccessSnackBar('Welcome back, ${result['data']['name']}!');
-
-      // TODO: Navigate to dashboard
-      // For now, just show success
+      // Log success details
       print('✅ Login successful: ${result['data']}');
       print('🔑 Token: ${result['data']['token']}');
+      print('🚀 Navigating to dashboard...');
 
-      // You can navigate to dashboard here:
-      // Navigator.pushReplacementNamed(context, '/dashboard');
+      // Navigate immediately
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const ParentDashboardScreen(),
+        ),
+      );
+
+      // Show welcome message on new screen after a delay
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Welcome back, ${result['data']['name']}!'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      });
     } else {
       // Show error
       _showErrorSnackBar(result['message']);
     }
+  }
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   void _showSuccessSnackBar(String message) {
@@ -86,9 +103,9 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Parent Login'),
+        title: const Text('SafeGuard Login'),
         backgroundColor: Colors.blue,
-        automaticallyImplyLeading: false, // Remove back button
+        automaticallyImplyLeading: false,
       ),
       body: SafeArea(
         child: Center(
@@ -117,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Welcome back!',
+                    'Parent Login',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 18,
@@ -177,7 +194,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // Login Button
+                  // Login Button (Parent)
                   ElevatedButton(
                     onPressed: _isLoading ? null : _login,
                     style: ElevatedButton.styleFrom(
@@ -197,13 +214,53 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     )
                         : const Text(
-                      'Login',
+                      'Login as Parent',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ✅ NOUVEAU: Child Login Button
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      // TODO: Navigate to child login screen
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ChildLoginScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.child_care),
+                    label: const Text(
+                      'Login as Child',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.green,
+                      side: const BorderSide(color: Colors.green, width: 2),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Divider
+                  const Row(
+                    children: [
+                      Expanded(child: Divider()),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: Text('OR', style: TextStyle(color: Colors.grey)),
+                      ),
+                      Expanded(child: Divider()),
+                    ],
                   ),
                   const SizedBox(height: 24),
 
