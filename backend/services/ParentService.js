@@ -2,6 +2,10 @@
 const Parent = require('../entities/Parent');
 const { getDb, saveDatabase } = require('../database/db');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = 'your-secret-key-change-in-production';
+const JWT_EXPIRES_IN = '7d';
 
 class ParentService {
   
@@ -51,6 +55,54 @@ class ParentService {
     return this.findById(parentId);
   }
 
+  // Login parent
+  login(email, password) {
+    const db = getDb();
+
+    // Find parent by email
+    const result = db.exec('SELECT * FROM parents WHERE email = ?', [email]);
+
+    if (result.length === 0 || result[0].values.length === 0) {
+      throw new Error('Invalid email or password');
+    }
+
+    // Convert to object
+    const row = this.rowToObject(result[0]);
+    
+    // Check password
+    const isValidPassword = bcrypt.compareSync(password, row.password);
+    
+    if (!isValidPassword) {
+      throw new Error('Invalid email or password');
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      {
+        id: row.id,
+        email: row.email,
+        familyCode: row.family_code
+      },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    // Get parent entity
+    const parent = Parent.fromRow(row);
+    
+    // Return as JSON with token
+    return {
+      id: parent.getId(),
+      name: parent.getName(),
+      lastName: parent.getLastName(),
+      email: parent.getEmail(),
+      familyCode: parent.getFamilyCode(),
+      phoneNumber: parent.getPhoneNumber(),
+      createdAt: parent.getCreatedAt(),
+      token: token
+    };
+  }
+
   // Find parent by ID
   findById(id) {
     const db = getDb();
@@ -77,7 +129,7 @@ class ParentService {
     return Parent.fromRow(row);
   }
 
- 
+  // Find parent by family code
   findByFamilyCode(familyCode) {
     const db = getDb();
     const result = db.exec('SELECT * FROM parents WHERE family_code = ?', [familyCode]);
@@ -88,24 +140,6 @@ class ParentService {
 
     const row = this.rowToObject(result[0]);
     return Parent.fromRow(row);
-  }
-
-
-  login(email, password) {
-    const parent = this.findByEmail(email);
-    
-    if (!parent) {
-      throw new Error('Invalid email or password');
-    }
-
-   
-    const isValid = bcrypt.compareSync(password, parent.password);
-    
-    if (!isValid) {
-      throw new Error('Invalid email or password');
-    }
-
-    return parent;
   }
 
   // Update parent profile

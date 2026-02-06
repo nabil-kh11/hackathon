@@ -68,44 +68,38 @@ class ParentController {
     }
   }
 
+ 
   // POST /api/parents/login
-  async login(req, res) {
-    try {
-      const { email, password } = req.body;
+async login(req, res) {
+  try {
+    const { email, password } = req.body;
 
-      // Validation
-      if (!email || !password) {
-        return res.status(400).json({
-          success: false,
-          message: 'Email and password are required'
-        });
-      }
-
-      // Login
-      const parent = ParentService.login(email, password);
-
-      return res.status(200).json({
-        success: true,
-        message: 'Login successful',
-        data: {
-          id: parent.getId(),
-          name: parent.getName(),
-          lastName: parent.getLastName(),
-          email: parent.getEmail(),
-          familyCode: parent.getFamilyCode(),
-          phoneNumber: parent.getPhoneNumber()
-        }
-      });
-
-    } catch (error) {
-      console.error('Login error:', error);
-      
-      return res.status(401).json({
+    // Validation
+    if (!email || !password) {
+      return res.status(400).json({
         success: false,
-        message: error.message || 'Invalid credentials'
+        message: 'Email and password are required'
       });
     }
+
+    // Login - returns plain object with token
+    const parentData = ParentService.login(email, password);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      data: parentData // Already includes token
+    });
+
+  } catch (error) {
+    console.error('Login error:', error);
+    
+    return res.status(401).json({
+      success: false,
+      message: error.message || 'Invalid credentials'
+    });
   }
+}
 
   // GET /api/parents/:id
   async getById(req, res) {
@@ -219,6 +213,78 @@ class ParentController {
       });
     }
   }
+
+
+
+  //new
+  // GET /api/parents/:id/dashboard
+async getDashboard(req, res) {
+  try {
+    const { id } = req.params;
+    const { getDb } = require('../database/db');
+    const db = getDb();
+
+    console.log(`📊 Getting dashboard for parent ${id}`);
+
+    // Get children count
+    let childrenCount = 0;
+    const childrenResult = db.exec(
+      'SELECT COUNT(*) as count FROM children WHERE parent_id = ?',
+      [parseInt(id)]
+    );
+    if (childrenResult.length > 0 && childrenResult[0].values.length > 0) {
+      childrenCount = childrenResult[0].values[0][0];
+    }
+
+    // Get incidents count (skip if table doesn't exist or for now)
+    let incidentsCount = 0;
+    
+    console.log(`✅ Dashboard: ${childrenCount} children, ${incidentsCount} incidents`);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        childrenCount,
+        incidentsCount
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get dashboard error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
 }
+
+// GET /api/parents/:id/children
+async getChildren(req, res) {
+  try {
+    const { id } = req.params;
+    const ChildService = require('../services/ChildService');
+
+    console.log(`👶 Getting children for parent ${id}`);
+
+    const children = ChildService.findByParentId(id);
+
+    console.log(`✅ Found ${children.length} children`);
+
+    return res.status(200).json({
+      success: true,
+      count: children.length,
+      data: children
+    });
+
+  } catch (error) {
+    console.error('❌ Get children error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+}
+}
+
 
 module.exports = new ParentController();

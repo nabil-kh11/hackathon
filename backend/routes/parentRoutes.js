@@ -2,6 +2,9 @@
 const express = require('express');
 const router = express.Router();
 const ParentController = require('../controllers/ParentController');
+//new
+router.get('/:id/dashboard', (req, res) => ParentController.getDashboard(req, res));
+router.get('/:id/children', (req, res) => ParentController.getChildren(req, res));
 
 // POST /api/parents/register - Register new parent
 router.post('/register', (req, res) => ParentController.register(req, res));

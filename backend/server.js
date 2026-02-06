@@ -6,8 +6,14 @@ const { initDatabase } = require('./database/db');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors());
+// Middleware - CORS Configuration
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -22,11 +28,13 @@ async function startServer() {
     dbInitialized = true;
     console.log('✅ Database initialized');
 
-    // Import routes
+    // Import routes ✅ BOTH HERE
     const parentRoutes = require('./routes/parentRoutes');
+    const childRoutes = require('./routes/childRoutes');
 
-    // Use routes
+    // Use routes ✅ BOTH HERE
     app.use('/api/parents', parentRoutes);
+    app.use('/api/children', childRoutes);  // ✅ MOVED HERE!
 
     // Health check
     app.get('/api/health', (req, res) => {
@@ -45,8 +53,10 @@ async function startServer() {
         endpoints: {
           health: '/api/health',
           parents: '/api/parents',
+          children: '/api/children',
           register: 'POST /api/parents/register',
-          login: 'POST /api/parents/login'
+          login: 'POST /api/parents/login',
+          addChild: 'POST /api/children/add'
         }
       });
     });
@@ -77,11 +87,19 @@ async function startServer() {
       console.log(`🔗 API Base: http://localhost:${PORT}/api`);
       console.log('');
       console.log('📋 Available Endpoints:');
-      console.log(`   POST http://localhost:${PORT}/api/parents/register`);
-      console.log(`   POST http://localhost:${PORT}/api/parents/login`);
-      console.log(`   GET  http://localhost:${PORT}/api/parents/:id`);
-      console.log(`   GET  http://localhost:${PORT}/api/health`);
+      console.log('   Parents:');
+      console.log(`     POST http://localhost:${PORT}/api/parents/register`);
+      console.log(`     POST http://localhost:${PORT}/api/parents/login`);
+      console.log(`     GET  http://localhost:${PORT}/api/parents/:id`);
+      console.log('   Children:');
+      console.log(`     POST http://localhost:${PORT}/api/children/add`);
+      console.log(`     POST http://localhost:${PORT}/api/children/connect`);
+      console.log(`     GET  http://localhost:${PORT}/api/children/:id`);
+      console.log(`     DELETE http://localhost:${PORT}/api/children/:id`);
+      console.log('   Health:');
+      console.log(`     GET  http://localhost:${PORT}/api/health`);
       console.log('═══════════════════════════════════════');
+      console.log('✅ CORS enabled for all origins');
       console.log('');
     });
 
