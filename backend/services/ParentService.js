@@ -17,18 +17,19 @@ class ParentService {
   }
 
   // Check if email already exists
-  emailExists(email) {
+  async emailExists(email) {
     const db = getDb();
-    const result = db.exec('SELECT id FROM parents WHERE email = ?', [email]);
-    return result.length > 0 && result[0].values.length > 0;
+    const [rows] = await db.query('SELECT id FROM parents WHERE email = ?', [email]);
+    return rows.length > 0;
   }
 
   // Register new parent
-  register(name, lastName, email, password, phoneNumber) {
+  async register(name, lastName, email, password, phoneNumber) {
     const db = getDb();
 
     // Validate email doesn't exist
-    if (this.emailExists(email)) {
+    const exists = await this.emailExists(email);
+    if (exists) {
       throw new Error('Email already registered');
     }
 
@@ -39,35 +40,30 @@ class ParentService {
     const familyCode = this.generateFamilyCode();
 
     // Insert into database
-    db.run(
+    const [result] = await db.query(
       `INSERT INTO parents (name, last_name, email, password, family_code, phone_number) 
        VALUES (?, ?, ?, ?, ?, ?)`,
       [name, lastName, email, hashedPassword, familyCode, phoneNumber]
     );
 
-    // Get the inserted ID
-    const result = db.exec('SELECT last_insert_rowid() as id');
-    const parentId = result[0].values[0][0];
-
-    saveDatabase();
+    console.log(`✅ Parent registered with ID: ${result.insertId}`);
 
     // Return the created parent (without password)
-    return this.findById(parentId);
+    return this.findById(result.insertId);
   }
 
   // Login parent
-  login(email, password) {
+  async login(email, password) {
     const db = getDb();
 
     // Find parent by email
-    const result = db.exec('SELECT * FROM parents WHERE email = ?', [email]);
+    const [rows] = await db.query('SELECT * FROM parents WHERE email = ?', [email]);
 
-    if (result.length === 0 || result[0].values.length === 0) {
+    if (rows.length === 0) {
       throw new Error('Invalid email or password');
     }
 
-    // Convert to object
-    const row = this.rowToObject(result[0]);
+    const row = rows[0];
     
     // Check password
     const isValidPassword = bcrypt.compareSync(password, row.password);
@@ -104,94 +100,62 @@ class ParentService {
   }
 
   // Find parent by ID
-  findById(id) {
+  async findById(id) {
     const db = getDb();
-    const result = db.exec('SELECT * FROM parents WHERE id = ?', [id]);
+    const [rows] = await db.query('SELECT * FROM parents WHERE id = ?', [id]);
     
-    if (result.length === 0 || result[0].values.length === 0) {
+    if (rows.length === 0) {
       return null;
     }
 
-    const row = this.rowToObject(result[0]);
-    return Parent.fromRow(row);
+    return Parent.fromRow(rows[0]);
   }
 
   // Find parent by email
-  findByEmail(email) {
+  async findByEmail(email) {
     const db = getDb();
-    const result = db.exec('SELECT * FROM parents WHERE email = ?', [email]);
+    const [rows] = await db.query('SELECT * FROM parents WHERE email = ?', [email]);
     
-    if (result.length === 0 || result[0].values.length === 0) {
+    if (rows.length === 0) {
       return null;
     }
 
-    const row = this.rowToObject(result[0]);
-    return Parent.fromRow(row);
+    return Parent.fromRow(rows[0]);
   }
 
   // Find parent by family code
-  findByFamilyCode(familyCode) {
+  async findByFamilyCode(familyCode) {
     const db = getDb();
-    const result = db.exec('SELECT * FROM parents WHERE family_code = ?', [familyCode]);
+    const [rows] = await db.query('SELECT * FROM parents WHERE family_code = ?', [familyCode]);
     
-    if (result.length === 0 || result[0].values.length === 0) {
+    if (rows.length === 0) {
       return null;
     }
 
-    const row = this.rowToObject(result[0]);
-    return Parent.fromRow(row);
+    return Parent.fromRow(rows[0]);
   }
 
   // Update parent profile
-  updateProfile(id, name, lastName, phoneNumber) {
+  async updateProfile(id, name, lastName, phoneNumber) {
     const db = getDb();
     
-    db.run(
+    await db.query(
       `UPDATE parents 
        SET name = ?, last_name = ?, phone_number = ? 
        WHERE id = ?`,
       [name, lastName, phoneNumber, id]
     );
 
-    saveDatabase();
+    console.log(`✅ Parent ${id} profile updated`);
     return this.findById(id);
   }
 
   // Get all parents (admin only)
-  findAll() {
+  async findAll() {
     const db = getDb();
-    const result = db.exec('SELECT * FROM parents');
+    const [rows] = await db.query('SELECT * FROM parents ORDER BY created_at DESC');
     
-    if (result.length === 0) {
-      return [];
-    }
-
-    const parents = [];
-    const columns = result[0].columns;
-    const values = result[0].values;
-
-    values.forEach(row => {
-      const obj = {};
-      columns.forEach((col, index) => {
-        obj[col] = row[index];
-      });
-      parents.push(Parent.fromRow(obj));
-    });
-
-    return parents;
-  }
-
-  // Helper: Convert SQL result to object
-  rowToObject(result) {
-    const columns = result.columns;
-    const values = result.values[0];
-    const obj = {};
-    
-    columns.forEach((col, index) => {
-      obj[col] = values[index];
-    });
-    
-    return obj;
+    return rows.map(row => Parent.fromRow(row));
   }
 }
 

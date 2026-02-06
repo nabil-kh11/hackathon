@@ -3,7 +3,7 @@ const ChildService = require('../services/ChildService');
 
 class ChildController {
 
-  // POST /api/children/login - Child login ✅ NOUVEAU
+  // POST /api/children/login - Child login
   async childLogin(req, res) {
     try {
       const { familyCode, childName } = req.body;
@@ -18,8 +18,8 @@ class ChildController {
         });
       }
 
-      // Find child by family code AND name
-      const child = ChildService.findByFamilyCodeAndName(familyCode, childName);
+      // Find child by family code AND name (await!)
+      const child = await ChildService.findByFamilyCodeAndName(familyCode, childName);
 
       if (!child) {
         return res.status(404).json({
@@ -28,8 +28,8 @@ class ChildController {
         });
       }
 
-      // Update last seen
-      ChildService.updateStatus(child.id, 'active');
+      // Update last seen (await!)
+      await ChildService.updateStatus(child.id, 'active');
 
       console.log('✅ Child logged in:', child);
 
@@ -71,8 +71,8 @@ class ChildController {
         });
       }
 
-      // Connect child
-      const child = ChildService.connect(
+      // Connect child (await!)
+      const child = await ChildService.connect(
         familyCode,
         childName,
         age,
@@ -127,9 +127,9 @@ class ChildController {
         });
       }
 
-      // Get parent to get family code
+      // Get parent to get family code (await!)
       const ParentService = require('../services/ParentService');
-      const parent = ParentService.findById(parentId);
+      const parent = await ParentService.findById(parentId);
 
       if (!parent) {
         return res.status(404).json({
@@ -140,8 +140,8 @@ class ChildController {
 
       const familyCode = parent.getFamilyCode();
 
-      // Create child
-      const child = ChildService.create(
+      // Create child (await!)
+      const child = await ChildService.create(
         childName,
         age,
         deviceId,
@@ -179,7 +179,7 @@ class ChildController {
   async getById(req, res) {
     try {
       const { id } = req.params;
-      const child = ChildService.findById(id);
+      const child = await ChildService.findById(id);
 
       if (!child) {
         return res.status(404).json({
@@ -207,7 +207,7 @@ class ChildController {
     try {
       const { id } = req.params;
       
-      const child = ChildService.findById(id);
+      const child = await ChildService.findById(id);
       if (!child) {
         return res.status(404).json({
           success: false,
@@ -215,7 +215,7 @@ class ChildController {
         });
       }
 
-      ChildService.remove(id);
+      await ChildService.remove(id);
 
       console.log(`✅ Child ${id} removed`);
 

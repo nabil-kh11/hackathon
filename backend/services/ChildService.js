@@ -4,174 +4,145 @@ const { getDb, saveDatabase } = require('../database/db');
 class ChildService {
 
   // Connect child to parent via family code
-  connect(familyCode, childName, age, deviceId, deviceInfo = null) {
+  async connect(familyCode, childName, age, deviceId, deviceInfo = null) {
     const db = getDb();
 
     // Find parent by family code
-    const parentResult = db.exec(
+    const [parentRows] = await db.query(
       'SELECT id FROM parents WHERE family_code = ?',
       [familyCode]
     );
 
-    if (parentResult.length === 0 || parentResult[0].values.length === 0) {
+    if (parentRows.length === 0) {
       throw new Error('Invalid family code');
     }
 
-    const parentId = parentResult[0].values[0][0];
+    const parentId = parentRows[0].id;
 
     // Check if device already connected
-    const existingDevice = db.exec(
+    const [existingDevice] = await db.query(
       'SELECT id FROM children WHERE device_id = ?',
       [deviceId]
     );
 
-    if (existingDevice.length > 0 && existingDevice[0].values.length > 0) {
+    if (existingDevice.length > 0) {
       throw new Error('Device already connected');
     }
 
     // Insert child
-    db.run(
+    const [result] = await db.query(
       `INSERT INTO children (name, age, device_id, device_info, parent_id, family_code, last_seen)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+       VALUES (?, ?, ?, ?, ?, ?, NOW())`,
       [childName, age || null, deviceId, deviceInfo || '', parentId, familyCode]
     );
 
-    // Get the inserted child
-    const result = db.exec('SELECT last_insert_rowid() as id');
-    const childId = result[0].values[0][0];
+    console.log(`✅ Child connected with ID: ${result.insertId}`);
 
-    saveDatabase();
-
-    return this.findById(childId);
+    // Return the created child
+    return this.findById(result.insertId);
   }
 
+  // Find child by family code and name
+  async findByFamilyCodeAndName(familyCode, childName) {
+    const db = getDb();
+    
+    const [rows] = await db.query(
+      'SELECT * FROM children WHERE family_code = ? AND LOWER(name) = LOWER(?)',
+      [familyCode, childName]
+    );
 
-// Find child by family code and name
-findByFamilyCodeAndName(familyCode, childName) {
-  const db = getDb();
-  
-  const result = db.exec(
-    'SELECT * FROM children WHERE family_code = ? AND name = ? COLLATE NOCASE',
-    [familyCode, childName]
-  );
+    if (rows.length === 0) {
+      return null;
+    }
 
-  if (result.length === 0 || result[0].values.length === 0) {
-    return null;
+    return rows[0];
   }
 
-  return this.rowToObject(result[0]);
-}
-
-
-
-  // ✅ NEW METHOD: Create child directly (for parent manual add)
-  create(childName, age, deviceId, deviceInfo, parentId, familyCode) {
+  // Create child directly (for parent manual add)
+  async create(childName, age, deviceId, deviceInfo, parentId, familyCode) {
     const db = getDb();
 
     // Check if device already exists
-    const existingDevice = db.exec(
+    const [existingDevice] = await db.query(
       'SELECT id FROM children WHERE device_id = ?',
       [deviceId]
     );
 
-    if (existingDevice.length > 0 && existingDevice[0].values.length > 0) {
+    if (existingDevice.length > 0) {
       throw new Error('Device already connected');
     }
 
     // Insert child
-    db.run(
+    const [result] = await db.query(
       `INSERT INTO children (name, age, device_id, device_info, parent_id, family_code, last_seen)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+       VALUES (?, ?, ?, ?, ?, ?, NOW())`,
       [childName, age || null, deviceId, deviceInfo || '', parentId, familyCode]
     );
 
-    // Get the inserted child
-    const result = db.exec('SELECT last_insert_rowid() as id');
-    const childId = result[0].values[0][0];
+    console.log(`✅ Child created with ID: ${result.insertId}`);
 
-    saveDatabase();
-
-    return this.findById(childId);
+    // Return the created child
+    return this.findById(result.insertId);
   }
 
   // Find child by ID
-  findById(id) {
+  async findById(id) {
     const db = getDb();
-    const result = db.exec(
+    const [rows] = await db.query(
       'SELECT * FROM children WHERE id = ?',
       [parseInt(id)]
     );
 
-    if (result.length === 0 || result[0].values.length === 0) {
+    if (rows.length === 0) {
       return null;
     }
 
-    return this.rowToObject(result[0]);
+    return rows[0];
   }
 
   // Get all children for a parent
-  findByParentId(parentId) {
+  async findByParentId(parentId) {
     const db = getDb();
-    const result = db.exec(
+    const [rows] = await db.query(
       'SELECT * FROM children WHERE parent_id = ? ORDER BY connected_at DESC',
       [parseInt(parentId)]
     );
 
-    if (result.length === 0 || result[0].values.length === 0) {
-      return [];
-    }
-
-    const columns = result[0].columns;
-    const values = result[0].values;
-
-    return values.map(row => {
-      const obj = {};
-      columns.forEach((col, index) => {
-        obj[col] = row[index];
-      });
-      return obj;
-    });
+    return rows;
   }
 
-
-
-
-
-
   // Update child status
-  updateStatus(id, status) {
+  async updateStatus(id, status) {
     const db = getDb();
     
-    db.run(
-      'UPDATE children SET status = ?, last_seen = datetime("now") WHERE id = ?',
+    await db.query(
+      'UPDATE children SET status = ?, last_seen = NOW() WHERE id = ?',
       [status, parseInt(id)]
     );
 
-    saveDatabase();
+    console.log(`✅ Child ${id} status updated to: ${status}`);
     return this.findById(id);
   }
 
   // Remove child
-  remove(id) {
+  async remove(id) {
     const db = getDb();
     
-    db.run('DELETE FROM children WHERE id = ?', [parseInt(id)]);
+    await db.query('DELETE FROM children WHERE id = ?', [parseInt(id)]);
     
-    saveDatabase();
+    console.log(`✅ Child ${id} removed`);
     return true;
   }
 
-  // Helper: Convert SQL result to object
-  rowToObject(result) {
-    const columns = result.columns;
-    const values = result.values[0];
-    const obj = {};
-    
-    columns.forEach((col, index) => {
-      obj[col] = values[index];
-    });
-    
-    return obj;
+  // Get children count for parent
+  async countByParentId(parentId) {
+    const db = getDb();
+    const [rows] = await db.query(
+      'SELECT COUNT(*) as count FROM children WHERE parent_id = ?',
+      [parseInt(parentId)]
+    );
+
+    return rows[0].count;
   }
 }
 
