@@ -1,4 +1,5 @@
 // lib/screens/parent_dashboard_screen.dart
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
@@ -14,477 +15,322 @@ class ParentDashboardScreen extends StatefulWidget {
   State<ParentDashboardScreen> createState() => _ParentDashboardScreenState();
 }
 
-class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
+class _ParentDashboardScreenState extends State<ParentDashboardScreen> with SingleTickerProviderStateMixin {
   final _apiService = ApiService();
-
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
   int _childrenCount = 0;
 
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _fadeAnimation = CurvedAnimation(parent: _animationController, curve: Curves.easeIn);
     _loadData();
   }
 
   Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    // Load user data
+    setState(() => _isLoading = true);
     final userData = await AuthService.getUserData();
-
-    // Load dashboard data from backend
     final dashboardResult = await _apiService.getDashboard();
 
     setState(() {
       _userData = userData;
-
       if (dashboardResult['success']) {
         _childrenCount = dashboardResult['data']['childrenCount'] ?? 0;
       }
-
       _isLoading = false;
     });
+    _animationController.forward();
   }
 
-  Future<void> _logout() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Logout',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await AuthService.logout();
-      if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-              (route) => false,
-        );
-      }
-    }
-  }
-
-  void _copyFamilyCode() {
-    final familyCode = _userData?['familyCode'] ?? '';
-    Clipboard.setData(ClipboardData(text: familyCode));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('✅ Family code copied to clipboard!'),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
-
-  void _goToChildren() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const ChildrenListScreen(),
-      ),
-    ).then((_) => _loadData()); // Refresh when coming back
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('SafeGuard Dashboard'),
-          backgroundColor: Colors.blue,
-        ),
-        body: const Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
-
-    if (_userData == null) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('Not logged in'),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  );
-                },
-                child: const Text('Go to Login'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('SafeGuard'),
-        backgroundColor: Colors.blue,
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-            tooltip: 'Refresh',
+      body: Stack(
+        children: [
+          _buildBackground(),
+          _isLoading ? _buildLoader() : _buildContent(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackground() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoader() {
+    return const Center(child: CircularProgressIndicator(color: Colors.cyanAccent));
+  }
+
+  Widget _buildContent() {
+    return SafeArea(
+      child: FadeTransition(
+        opacity: _fadeAnimation,
+        child: RefreshIndicator(
+          onRefresh: _loadData,
+          backgroundColor: const Color(0xFF1A2A3A),
+          color: Colors.cyanAccent,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCustomAppBar(),
+                const SizedBox(height: 25),
+                _buildWelcomeHeader(),
+                const SizedBox(height: 25),
+                _buildFamilyCodeSection(),
+                const SizedBox(height: 25),
+                _buildStatsGrid(),
+                const SizedBox(height: 30),
+                const Text(
+                  "ACTIONS RAPIDES",
+                  style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                ),
+                const SizedBox(height: 15),
+                _buildQuickActions(),
+              ],
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-            tooltip: 'Logout',
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomAppBar() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Row(
+          children: [
+            Icon(Icons.shield, color: Colors.cyanAccent, size: 28),
+            SizedBox(width: 10),
+            Text('SAFEGUARD', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 1)),
+          ],
+        ),
+        Row(
+          children: [
+            _buildCircleButton(Icons.refresh, _loadData),
+            const SizedBox(width: 10),
+            _buildCircleButton(Icons.logout, _logout, color: Colors.redAccent),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWelcomeHeader() {
+    return _buildGlassContainer(
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.cyanAccent),
+            child: const CircleAvatar(radius: 30, backgroundColor: Color(0xFF1A2A3A), child: Icon(Icons.person, color: Colors.white, size: 35)),
+          ),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("TABLEAU DE BORD", style: TextStyle(color: Colors.cyanAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                Text('${_userData?['name']} ${_userData?['lastName']}', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                Text('${_userData?['email']}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              ],
+            ),
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildWelcomeCard(),
-              const SizedBox(height: 20),
-              _buildFamilyCodeCard(),
-              const SizedBox(height: 20),
-              _buildStatsCard(),
-              const SizedBox(height: 20),
-              const Text(
-                'Quick Actions',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildQuickActions(),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
-  Widget _buildWelcomeCard() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blue.shade400, Colors.blue.shade600],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        padding: const EdgeInsets.all(20.0),
-        child: Row(
-          children: [
-            const CircleAvatar(
-              radius: 35,
-              backgroundColor: Colors.white,
-              child: Icon(Icons.shield, size: 40, color: Colors.blue),
+  Widget _buildFamilyCodeSection() {
+    final familyCode = _userData?['familyCode'] ?? '---';
+    return _buildGlassContainer(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          const Text("VOTRE CODE FAMILLE UNIQUE", style: TextStyle(color: Colors.white70, fontSize: 12, letterSpacing: 1)),
+          const SizedBox(height: 15),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            decoration: BoxDecoration(
+              color: Colors.black26,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: Colors.white10),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Welcome back!',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${_userData!['name']} ${_userData!['lastName']}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _userData!['email'],
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFamilyCodeCard() {
-    final familyCode = _userData?['familyCode'] ?? 'N/A';
-
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.family_restroom, color: Colors.blue, size: 28),
-                const SizedBox(width: 12),
-                const Text(
-                  'Your Family Code',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.blue.shade200, width: 2),
-              ),
-              child: Text(
-                familyCode,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue.shade700,
-                  letterSpacing: 2,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Share this code with your children so they can log in.',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey,
-              ),
+            child: Text(
+              familyCode,
               textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.cyanAccent, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: 8),
             ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _copyFamilyCode,
-                icon: const Icon(Icons.copy, size: 18),
-                label: const Text('Copy Family Code'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
+          ),
+          const SizedBox(height: 15),
+          ElevatedButton.icon(
+            onPressed: _copyFamilyCode,
+            icon: const Icon(Icons.copy, size: 18),
+            label: const Text("COPIER LE CODE"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.cyanAccent.withOpacity(0.1),
+              foregroundColor: Colors.cyanAccent,
+              side: const BorderSide(color: Colors.cyanAccent),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildStatsCard() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildStatItem(
-              icon: Icons.child_care,
-              label: 'Children',
-              value: _childrenCount.toString(),
-              color: Colors.blue,
-            ),
-            Container(
-              height: 50,
-              width: 1,
-              color: Colors.grey.shade300,
-            ),
-            _buildStatItem(
-              icon: Icons.shield_outlined,
-              label: 'Status',
-              value: _childrenCount == 0 ? 'Setup' : 'Active',
-              color: _childrenCount == 0 ? Colors.orange : Colors.green,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatItem({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Column(
+  Widget _buildStatsGrid() {
+    return Row(
       children: [
-        Icon(icon, size: 40, color: color),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            color: Colors.grey,
-          ),
-        ),
+        Expanded(child: _buildStatCard("ENFANTS", _childrenCount.toString(), Icons.child_care, Colors.blueAccent)),
+        const SizedBox(width: 15),
+        Expanded(child: _buildStatCard("STATUT", _childrenCount == 0 ? "Initial" : "Actif", Icons.verified_user, _childrenCount == 0 ? Colors.orange : Colors.greenAccent)),
       ],
+    );
+  }
+
+  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+    return _buildGlassContainer(
+      padding: const EdgeInsets.all(15),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 30),
+          const SizedBox(height: 10),
+          Text(value, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(title, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+        ],
+      ),
     );
   }
 
   Widget _buildQuickActions() {
     return Column(
       children: [
-        _buildActionCard(
-          icon: Icons.child_care,
-          title: 'My Children',
-          subtitle: _childrenCount == 0
-              ? 'No children connected yet'
-              : '$_childrenCount ${_childrenCount == 1 ? "child" : "children"} connected',
-          color: Colors.blue,
-          onTap: _goToChildren,
-        ),
+        _buildActionTile("Mes Enfants", "Gérer et surveiller vos enfants", Icons.people_alt, Colors.cyanAccent, _goToChildren),
         const SizedBox(height: 12),
-        _buildActionCard(
-          icon: Icons.add_circle,
-          title: 'Add Child',
-          subtitle: 'Manually add a child to monitor',
-          color: Colors.green,
-          onTap: _goToAddChild,
-        ),
+        _buildActionTile("Ajouter un enfant", "Connecter un nouvel appareil", Icons.person_add, Colors.greenAccent, _goToAddChild),
         const SizedBox(height: 12),
-        _buildActionCard(
-          icon: Icons.person,
-          title: 'My Profile',
-          subtitle: 'View and edit your information',
-          color: Colors.teal,
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Profile - Coming soon!')),
-            );
-          },
-        ),
+        _buildActionTile("Mon Profil", "Paramètres du compte", Icons.settings, Colors.blueGrey, () {}),
       ],
     );
   }
 
-  Widget _buildActionCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, size: 32, color: color),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.grey),
-            ],
+  Widget _buildActionTile(String title, String subtitle, IconData icon, Color color, VoidCallback onTap) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(15),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            border: Border.all(color: Colors.white.withOpacity(0.1)),
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: ListTile(
+            onTap: onTap,
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              child: Icon(icon, color: color),
+            ),
+            title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+            trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 16),
           ),
         ),
       ),
     );
   }
 
-  void _goToAddChild() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const AddChildScreen(),
+  // Helper Widgets
+  Widget _buildGlassContainer({required Widget child, EdgeInsetsGeometry? padding}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.1)),
+          ),
+          child: child,
+        ),
       ),
     );
+  }
 
-    // If child was added, reload dashboard
-    if (result == true) {
-      _loadData();
+  Widget _buildCircleButton(IconData icon, VoidCallback onTap, {Color color = Colors.white}) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.05), border: Border.all(color: Colors.white10)),
+        child: Icon(icon, color: color, size: 20),
+      ),
+    );
+  }
+
+  // --- Logic remain the same ---
+  void _copyFamilyCode() {
+    final familyCode = _userData?['familyCode'] ?? '';
+    Clipboard.setData(ClipboardData(text: familyCode));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('✅ Code copié !'), backgroundColor: Colors.cyan),
+    );
+  }
+
+  void _goToChildren() {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => const ChildrenListScreen())).then((_) => _loadData());
+  }
+
+  void _goToAddChild() async {
+    final result = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddChildScreen()));
+    if (result == true) _loadData();
+  }
+
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A2A3A),
+        title: const Text('Déconnexion', style: TextStyle(color: Colors.white)),
+        content: const Text('Voulez-vous vraiment quitter ?', style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('ANNULER', style: TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('QUITTER', style: TextStyle(color: Colors.redAccent))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await AuthService.logout();
+      if (mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false);
     }
   }
 }
